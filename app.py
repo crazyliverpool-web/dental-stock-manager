@@ -1,11 +1,11 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime, date
-from sheets import get_stock_df, get_staff_check_summary
+from sheets import get_stock_df, get_staff_check_summary, get_staff_list
 
 st.set_page_config(page_title="Dental Stock Manager", page_icon="🦷", layout="wide")
 
-STAFF = ["ทั้งหมด", "เปิ้ล", "ซะห์", "อาร์ม", "มี", "ฉ้ะ", "ฟีร่า", "ฮัน", "กะละห์"]
+STAFF = ["ทั้งหมด"] + get_staff_list()
 
 st.markdown("""
 <style>

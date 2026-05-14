@@ -91,6 +91,57 @@ def record_stock_check(staff_name: str):
     return True
 
 
+def get_staff_list() -> list:
+    """อ่านรายชื่อพนักงานจาก Staff sheet — fallback เป็น hardcode ถ้า sheet ยังไม่มี"""
+    if _is_connected():
+        try:
+            sheet = _get_client().open_by_key(_get_sheet_id()).worksheet("Staff")
+            records = sheet.get_all_records()
+            names = [r["ชื่อ"] for r in records if r.get("ชื่อ")]
+            if names:
+                return names
+        except Exception as e:
+            print(f"[sheets] Staff read error: {e}")
+    return ["เปิ้ล", "ซะห์", "อาร์ม", "มี", "ฉ้ะ", "ฟีร่า", "ฮัน", "กะละห์"]
+
+
+def add_staff(name: str) -> bool:
+    if _is_connected():
+        try:
+            sheet = _get_client().open_by_key(_get_sheet_id()).worksheet("Staff")
+            sheet.append_row([name])
+            return True
+        except Exception as e:
+            print(f"[sheets] Add staff error: {e}")
+    return False
+
+
+def remove_staff(name: str) -> bool:
+    if _is_connected():
+        try:
+            sheet = _get_client().open_by_key(_get_sheet_id()).worksheet("Staff")
+            records = sheet.get_all_records()
+            for i, row in enumerate(records):
+                if row.get("ชื่อ") == name:
+                    sheet.delete_rows(i + 2)
+                    return True
+        except Exception as e:
+            print(f"[sheets] Remove staff error: {e}")
+    return False
+
+
+def add_stock_item(name: str, unit: str, qty: int, reorder: int, category: str, responsible: str) -> bool:
+    """เพิ่มรายการวัสดุใหม่ลง Stock sheet"""
+    if _is_connected():
+        try:
+            sheet = _get_client().open_by_key(_get_sheet_id()).worksheet("Stock")
+            sheet.append_row([name, unit, qty, reorder, category, responsible, ""])
+            return True
+        except Exception as e:
+            print(f"[sheets] Add item error: {e}")
+    return False
+
+
 def get_staff_check_summary(df: pd.DataFrame) -> dict:
     """คืน dict {staff_name: last_check_date or None} สำหรับทุก staff"""
     if "ผู้รับผิดชอบ" not in df.columns or "วันที่เช็คล่าสุด" not in df.columns:

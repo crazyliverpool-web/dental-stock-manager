@@ -5,11 +5,11 @@ from datetime import date
 import gspread
 from google.oauth2.service_account import Credentials
 from dotenv import load_dotenv
-from sheets import get_stock_df, record_stock_check
+from sheets import get_stock_df, record_stock_check, get_staff_list
 
 load_dotenv()
 
-STAFF = ["เปิ้ล", "ซะห์", "อาร์ม", "มี", "ฉ้ะ", "ฟีร่า", "ฮัน", "กะละห์"]
+STAFF = get_staff_list()
 
 st.set_page_config(page_title="อัพเดทสต้อค", page_icon="📋", layout="wide")
 
