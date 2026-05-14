@@ -188,6 +188,57 @@ def get_history_df() -> pd.DataFrame:
     return _local_read()
 
 
+# ─── Pending Sync (DirectEditLog) ────────────────────────────────────────────
+
+def get_pending_syncs() -> pd.DataFrame:
+    """อ่าน DirectEditLog เฉพาะ row ที่ยังไม่ได้ confirm (สถานะว่าง)"""
+    if not _is_connected():
+        return pd.DataFrame()
+    try:
+        sheet = _get_client().open_by_key(_get_sheet_id()).worksheet("DirectEditLog")
+        records = sheet.get_all_records()
+        if not records:
+            return pd.DataFrame()
+        df = pd.DataFrame(records)
+        if "สถานะ" not in df.columns:
+            df["สถานะ"] = ""
+        df["_row"] = range(2, len(df) + 2)
+        return df[df["สถานะ"].astype(str).str.strip() == ""].reset_index(drop=True)
+    except Exception as e:
+        print(f"[sheets] DirectEditLog read error: {e}")
+        return pd.DataFrame()
+
+
+def confirm_sync(sheet_row: int, item_name: str, col_name: str,
+                 old_val: str, new_val: str, staff: str, timestamp: str) -> bool:
+    """เขียน History + mark DirectEditLog row ว่าเสร็จแล้ว"""
+    if not _is_connected():
+        return False
+    try:
+        ss = _get_client().open_by_key(_get_sheet_id())
+
+        qty  = int(new_val) if col_name == "คงเหลือ" and str(new_val).lstrip("-").isdigit() else 0
+        note = f"{col_name}: {old_val} → {new_val} (sync จาก Sheet)"
+        ss.worksheet("History").append_row(
+            [timestamp, "อัพเดทสต้อค", item_name, qty, note, staff]
+        )
+
+        log     = ss.worksheet("DirectEditLog")
+        headers = log.row_values(1)
+        if "สถานะ" not in headers:
+            log.update_cell(1, len(headers) + 1, "สถานะ")
+            status_col = len(headers) + 1
+        else:
+            status_col = headers.index("สถานะ") + 1
+
+        confirmed_at = datetime.now().strftime("%Y-%m-%d %H:%M")
+        log.update_cell(sheet_row, status_col, f"✅ {staff} ({confirmed_at})")
+        return True
+    except Exception as e:
+        print(f"[sheets] confirm_sync error: {e}")
+        return False
+
+
 # ─── Local JSON fallback ──────────────────────────────────────────────────────
 
 def _local_append(entry: dict):

@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime, date
-from sheets import get_stock_df, get_staff_check_summary, get_staff_list
+from sheets import get_stock_df, get_staff_check_summary, get_staff_list, get_pending_syncs
 
 st.set_page_config(page_title="Dental Stock Manager", page_icon="🦷", layout="wide")
 
@@ -36,6 +36,12 @@ st.markdown("""
 
 st.markdown('<div class="main-header">🦷 Dental Stock Manager</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-header">ระบบจัดการสต้อควัสดุทันตกรรม</div>', unsafe_allow_html=True)
+
+# ─── Pending sync badge ───────────────────────────────────────────────────────
+_pending = get_pending_syncs()
+if not _pending.empty:
+    n = len(_pending)
+    st.warning(f"🔄 มี **{n} รายการ** ที่แก้ใน Sheet โดยตรง รอ confirm → [ไปหน้า Sync](/3_Sync)")
 
 # ─── Staff selector ───────────────────────────────────────────────────────────
 st.markdown('<div class="staff-label">👤 เลือกพนักงาน</div>', unsafe_allow_html=True)
