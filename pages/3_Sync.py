@@ -1,9 +1,9 @@
 import streamlit as st
 import sys, os
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from sheets import get_pending_syncs, confirm_sync
+from sheets import get_pending_syncs, confirm_sync, get_staff_list
 
-STAFF = ["เปิ้ล", "ซะห์", "อาร์ม", "มี", "ฉ้ะ", "ฟีร่า", "ฮัน", "กะละห์"]
+STAFF = get_staff_list()
 
 st.set_page_config(page_title="Pending Sync", page_icon="🔄", layout="wide")
 

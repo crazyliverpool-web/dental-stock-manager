@@ -95,8 +95,11 @@ def save_stock_updates(edited_df: pd.DataFrame, original_df: pd.DataFrame, staff
     updates, history = [], []
     for idx in edited_df.index[changed_mask]:
         item_name = edited_df.at[idx, "ชื่อวัสดุ"]
-        new_qty   = int(edited_df.at[idx, "คงเหลือ"])
-        old_qty   = int(original_df.at[idx, "คงเหลือ"])
+        try:
+            new_qty = int(edited_df.at[idx, "คงเหลือ"])
+            old_qty = int(original_df.at[idx, "คงเหลือ"])
+        except (ValueError, TypeError):
+            continue
         row_num   = name_to_row.get(item_name)
         if row_num:
             updates.append({"range": f"{col_ltr}{row_num}", "values": [[new_qty]]})
@@ -133,7 +136,8 @@ def record_stock_check(staff_name: str) -> bool:
             return True
         except Exception as e:
             print(f"[sheets] Check date error: {e}")
-    return True
+            return False
+    return False
 
 
 def get_staff_list() -> list:

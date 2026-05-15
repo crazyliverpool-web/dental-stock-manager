@@ -80,5 +80,8 @@ with save_col:
 with check_col:
     if selected != "ทั้งหมด":
         if st.button(f"✓ บันทึกว่า {selected} เช็คสต้อคแล้ว", use_container_width=True):
-            record_stock_check(selected)
-            st.success(f"บันทึกแล้ว — {date.today().strftime('%Y-%m-%d')}")
+            ok = record_stock_check(selected)
+            if ok:
+                st.success(f"บันทึกแล้ว — {date.today().strftime('%Y-%m-%d')}")
+            else:
+                st.error("บันทึกไม่สำเร็จ กรุณาลองใหม่ หรือเช็คการเชื่อมต่อ")
