@@ -141,6 +141,8 @@ ALIAS = {
     # g-aenial universal (มีวงเล็บ)
     "g-aenial universal (หลอดสีน้ำตาล) a2": "g-aenial universal a2",
     "g-aenial universal (หลอดสีน้ำตาล) a3": "g-aenial universal a3",
+    # ปูนเขียว
+    "ปูนเขียวลุง":                       "ปูนเขียว (alginate)",
     # misc
     "โซเดียมไฮเปอร์คลอไลท์ (เขียว) 2.5%": "โซเดียมไฮเปอร์คลอไรท์ 2.5% เขียว",
     "alcohol ขวดเล็ก/ขวดใหญ่":          "alcohol",
@@ -226,7 +228,15 @@ def run(dry_run: bool = True):
                 entry = stock_index.get(alias_key)
                 match_type = "alias"
 
-            # 3. fuzzy
+            # 3. ขนาด X*Y → รากเทียม bd XxY (implant sizes)
+            if entry is None:
+                m = re.match(r'^ขนาด (\d+\.?\d*)\*(\d+\.?\d*)$', key)
+                if m:
+                    entry = stock_index.get(f'รากเทียม bd {m.group(1)}x{m.group(2)}')
+                    if entry:
+                        match_type = "implant-pattern"
+
+            # 4. fuzzy
             if entry is None:
                 fkey = fuzzy_match(key, stock_keys, cutoff=0.80)
                 if fkey:
