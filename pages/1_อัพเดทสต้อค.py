@@ -2,28 +2,13 @@ import streamlit as st
 import sys, os
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from datetime import date
-import gspread
-from google.oauth2.service_account import Credentials
-from dotenv import load_dotenv
-from sheets import get_stock_df, record_stock_check, get_staff_list
-
-load_dotenv()
+from sheets import get_stock_df, save_stock_updates, record_stock_check, get_staff_list
+from utils import apply_styles
 
 STAFF = get_staff_list()
 
 st.set_page_config(page_title="อัพเดทสต้อค", page_icon="📋", layout="wide")
-
-st.markdown("""
-<style>
-    .main-header { font-size: 2rem; font-weight: 700; color: #4FC3F7; margin-bottom: 0.25rem; }
-    .sub-header  { font-size: 0.9rem; color: #888; margin-bottom: 1.5rem; }
-    .section-title {
-        font-size: 1.1rem; font-weight: 600; color: #4FC3F7;
-        border-bottom: 1px solid #2A3040; padding-bottom: 0.4rem; margin-bottom: 1rem;
-    }
-    .staff-label { font-size: 0.85rem; color: #888; margin-bottom: 0.5rem; }
-</style>
-""", unsafe_allow_html=True)
+apply_styles()
 
 st.markdown('<div class="main-header">📋 อัพเดทสต้อค</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-header">นับของแล้วใส่ตัวเลข กดบันทึกครั้งเดียว</div>', unsafe_allow_html=True)
@@ -62,8 +47,10 @@ st.caption("แก้ไขตัวเลขในคอลัมน์ **ค�
 edit_cols = ["ชื่อวัสดุ", "หน่วย", "คงเหลือ", "Reorder Point", "หมวดหมู่"]
 edit_cols = [c for c in edit_cols if c in view.columns]
 
+original = view[edit_cols].reset_index(drop=True)
+
 edited = st.data_editor(
-    view[edit_cols].reset_index(drop=True),
+    original,
     use_container_width=True,
     hide_index=True,
     disabled=[c for c in edit_cols if c != "คงเหลือ"],
@@ -81,22 +68,12 @@ save_col, check_col = st.columns([1, 1], gap="large")
 with save_col:
     if st.button("💾 บันทึกสต้อค", type="primary", use_container_width=True):
         try:
-            SCOPES = ["https://www.googleapis.com/auth/spreadsheets","https://www.googleapis.com/auth/drive"]
-            creds  = Credentials.from_service_account_file(
-                os.path.join(os.path.dirname(os.path.dirname(__file__)), "credentials", "service_account.json"),
-                scopes=SCOPES
-            )
-            sheet   = gspread.authorize(creds).open_by_key(os.getenv("SHEET_ID","")).worksheet("Stock")
-            records = sheet.get_all_records()
-            updates = []
-            for _, erow in edited.iterrows():
-                for j, srow in enumerate(records):
-                    if srow["ชื่อวัสดุ"] == erow["ชื่อวัสดุ"]:
-                        updates.append({"range": f"C{j+2}", "values": [[int(erow["คงเหลือ"])]]})
-                        break
-            if updates:
-                sheet.batch_update(updates)
-            st.success(f"✓ บันทึก {len(updates)} รายการแล้ว")
+            staff_name = selected if selected != "ทั้งหมด" else "admin"
+            count = save_stock_updates(edited, original, staff_name)
+            if count:
+                st.success(f"✓ บันทึก {count} รายการแล้ว")
+            else:
+                st.info("ไม่มีรายการที่เปลี่ยนแปลง")
         except Exception as e:
             st.error(f"บันทึกไม่สำเร็จ: {e}")
 

@@ -2,6 +2,7 @@ import os
 import json
 import pandas as pd
 import gspread
+import streamlit as st
 from google.oauth2.service_account import Credentials
 from dotenv import load_dotenv
 from datetime import datetime
@@ -18,17 +19,8 @@ CREDENTIALS_PATH  = os.getenv("CREDENTIALS_PATH", "credentials/service_account.j
 LOCAL_HISTORY_FILE = os.path.join(os.path.dirname(__file__), "data", "history.json")
 
 
-def _is_connected() -> bool:
-    try:
-        import streamlit as st
-        return bool(st.secrets.get("SHEET_ID") or SHEET_ID)
-    except Exception:
-        return bool(SHEET_ID and os.path.exists(CREDENTIALS_PATH))
-
-
 def _get_client():
     try:
-        import streamlit as st
         creds = Credentials.from_service_account_info(
             dict(st.secrets["gcp_service_account"]), scopes=SCOPES
         )
@@ -39,14 +31,36 @@ def _get_client():
 
 def _get_sheet_id() -> str:
     try:
-        import streamlit as st
         return st.secrets.get("SHEET_ID", SHEET_ID)
     except Exception:
         return SHEET_ID
 
 
+def _is_connected() -> bool:
+    try:
+        sid       = st.secrets.get("SHEET_ID", "") or SHEET_ID
+        has_creds = "gcp_service_account" in st.secrets or os.path.exists(CREDENTIALS_PATH)
+        return bool(sid and has_creds)
+    except Exception:
+        return bool(SHEET_ID and os.path.exists(CREDENTIALS_PATH))
+
+
+def _find_col(headers: list, col_name: str) -> int:
+    """Return 1-based column index; raises ValueError if not found."""
+    try:
+        return headers.index(col_name) + 1
+    except ValueError:
+        raise ValueError(f"Column '{col_name}' not found in sheet headers: {headers}")
+
+
+def _a1_col(col: int) -> str:
+    """Convert 1-based column number to A1-notation letter(s), e.g. 3 → 'C'."""
+    return gspread.utils.rowcol_to_a1(1, col).rstrip("0123456789")
+
+
 # ─── Stock ────────────────────────────────────────────────────────────────────
 
+@st.cache_data(ttl=60)
 def get_stock_df() -> pd.DataFrame:
     if _is_connected():
         try:
@@ -57,34 +71,63 @@ def get_stock_df() -> pd.DataFrame:
     return _mock_stock()
 
 
-def update_stock_qty(item_name: str, delta: int):
-    """delta = +รับเข้า / -เบิกออก"""
-    if _is_connected():
-        try:
-            sheet   = _get_client().open_by_key(_get_sheet_id()).worksheet("Stock")
-            records = sheet.get_all_records()
-            for i, row in enumerate(records):
-                if row["ชื่อวัสดุ"] == item_name:
-                    new_qty = max(0, int(row["คงเหลือ"]) + delta)
-                    sheet.update_cell(i + 2, 3, new_qty)
-                    return
-        except Exception as e:
-            print(f"[sheets] Stock update error: {e}")
+def save_stock_updates(edited_df: pd.DataFrame, original_df: pd.DataFrame, staff_name: str) -> int:
+    """
+    Batch-update changed คงเหลือ values in Stock sheet and log one history
+    entry per changed item. Returns the number of rows actually updated.
+    """
+    if not _is_connected():
+        return 0
+
+    changed_mask = edited_df["คงเหลือ"].values != original_df["คงเหลือ"].values
+    if not changed_mask.any():
+        return 0
+
+    sheet        = _get_client().open_by_key(_get_sheet_id()).worksheet("Stock")
+    headers      = sheet.row_values(1)
+    col_qty      = _find_col(headers, "คงเหลือ")
+    col_ltr      = _a1_col(col_qty)
+    records      = sheet.get_all_records()
+    name_to_row  = {r["ชื่อวัสดุ"]: i + 2 for i, r in enumerate(records)}
+
+    updates, history = [], []
+    for idx in edited_df.index[changed_mask]:
+        item_name = edited_df.at[idx, "ชื่อวัสดุ"]
+        new_qty   = int(edited_df.at[idx, "คงเหลือ"])
+        old_qty   = int(original_df.at[idx, "คงเหลือ"])
+        row_num   = name_to_row.get(item_name)
+        if row_num:
+            updates.append({"range": f"{col_ltr}{row_num}", "values": [[new_qty]]})
+            history.append((item_name, old_qty, new_qty))
+
+    if updates:
+        sheet.batch_update(updates)
+
+    for item_name, old_qty, new_qty in history:
+        add_history("อัพเดทสต้อค", item_name, new_qty,
+                    f"{old_qty} → {new_qty}", staff_name)
+
+    get_stock_df.clear()
+    return len(updates)
 
 
-def record_stock_check(staff_name: str):
-    """บันทึกวันที่เช็คสต้อคของพนักงานคนนี้ในทุก row ที่รับผิดชอบ"""
+def record_stock_check(staff_name: str) -> bool:
     today = datetime.now().strftime("%Y-%m-%d")
     if _is_connected():
         try:
-            sheet   = _get_client().open_by_key(_get_sheet_id()).worksheet("Stock")
-            records = sheet.get_all_records()
-            updates = []
-            for i, row in enumerate(records):
-                if row.get("ผู้รับผิดชอบ") == staff_name:
-                    updates.append({"range": f"G{i+2}", "values": [[today]]})
+            sheet    = _get_client().open_by_key(_get_sheet_id()).worksheet("Stock")
+            headers  = sheet.row_values(1)
+            col_date = _find_col(headers, "วันที่เช็คล่าสุด")
+            col_ltr  = _a1_col(col_date)
+            records  = sheet.get_all_records()
+            updates  = [
+                {"range": f"{col_ltr}{i+2}", "values": [[today]]}
+                for i, row in enumerate(records)
+                if row.get("ผู้รับผิดชอบ") == staff_name
+            ]
             if updates:
                 sheet.batch_update(updates)
+            get_stock_df.clear()
             return True
         except Exception as e:
             print(f"[sheets] Check date error: {e}")
@@ -92,12 +135,11 @@ def record_stock_check(staff_name: str):
 
 
 def get_staff_list() -> list:
-    """อ่านรายชื่อพนักงานจาก Staff sheet — fallback เป็น hardcode ถ้า sheet ยังไม่มี"""
     if _is_connected():
         try:
-            sheet = _get_client().open_by_key(_get_sheet_id()).worksheet("Staff")
+            sheet   = _get_client().open_by_key(_get_sheet_id()).worksheet("Staff")
             records = sheet.get_all_records()
-            names = [r["ชื่อ"] for r in records if r.get("ชื่อ")]
+            names   = [r["ชื่อ"] for r in records if r.get("ชื่อ")]
             if names:
                 return names
         except Exception as e:
@@ -119,7 +161,7 @@ def add_staff(name: str) -> bool:
 def remove_staff(name: str) -> bool:
     if _is_connected():
         try:
-            sheet = _get_client().open_by_key(_get_sheet_id()).worksheet("Staff")
+            sheet   = _get_client().open_by_key(_get_sheet_id()).worksheet("Staff")
             records = sheet.get_all_records()
             for i, row in enumerate(records):
                 if row.get("ชื่อ") == name:
@@ -131,11 +173,11 @@ def remove_staff(name: str) -> bool:
 
 
 def add_stock_item(name: str, unit: str, qty: int, reorder: int, category: str, responsible: str) -> bool:
-    """เพิ่มรายการวัสดุใหม่ลง Stock sheet"""
     if _is_connected():
         try:
             sheet = _get_client().open_by_key(_get_sheet_id()).worksheet("Stock")
             sheet.append_row([name, unit, qty, reorder, category, responsible, ""])
+            get_stock_df.clear()
             return True
         except Exception as e:
             print(f"[sheets] Add item error: {e}")
@@ -143,7 +185,6 @@ def add_stock_item(name: str, unit: str, qty: int, reorder: int, category: str, 
 
 
 def get_staff_check_summary(df: pd.DataFrame) -> dict:
-    """คืน dict {staff_name: last_check_date or None} สำหรับทุก staff"""
     if "ผู้รับผิดชอบ" not in df.columns or "วันที่เช็คล่าสุด" not in df.columns:
         return {}
     result = {}
@@ -242,6 +283,7 @@ def confirm_sync(sheet_row: int, item_name: str, col_name: str,
 # ─── Local JSON fallback ──────────────────────────────────────────────────────
 
 def _local_append(entry: dict):
+    os.makedirs(os.path.dirname(LOCAL_HISTORY_FILE), exist_ok=True)
     records = _local_load()
     records.append(entry)
     with open(LOCAL_HISTORY_FILE, "w", encoding="utf-8") as f:
@@ -250,9 +292,7 @@ def _local_append(entry: dict):
 
 def _local_read() -> pd.DataFrame:
     records = _local_load()
-    if records:
-        return pd.DataFrame(records)
-    return _mock_history()
+    return pd.DataFrame(records) if records else _mock_history()
 
 
 def _local_load() -> list:
@@ -266,22 +306,22 @@ def _local_load() -> list:
 
 def _mock_stock() -> pd.DataFrame:
     return pd.DataFrame([
-        {"ชื่อวัสดุ": "Composite Resin (Filtek Z350)",      "หน่วย": "กล่อง",    "คงเหลือ": 3,  "Reorder Point": 5,  "หมวดหมู่": "Restorative"},
-        {"ชื่อวัสดุ": "Bonding Agent (Adper Single Bond)",  "หน่วย": "ขวด",      "คงเหลือ": 2,  "Reorder Point": 3,  "หมวดหมู่": "Restorative"},
-        {"ชื่อวัสดุ": "Glass Ionomer Cement (Fuji IX)",     "หน่วย": "กระป๋อง",  "คงเหลือ": 8,  "Reorder Point": 4,  "หมวดหมู่": "Restorative"},
-        {"ชื่อวัสดุ": "Impression Material (Aquasil)",      "หน่วย": "กล่อง",    "คงเหลือ": 1,  "Reorder Point": 3,  "หมวดหมู่": "Impression"},
-        {"ชื่อวัสดุ": "Lidocaine 2% (ยาชา)",                "หน่วย": "กล่อง",    "คงเหลือ": 12, "Reorder Point": 10, "หมวดหมู่": "Anesthetic"},
-        {"ชื่อวัสดุ": "Gloves Size M",                      "หน่วย": "กล่อง",    "คงเหลือ": 4,  "Reorder Point": 5,  "หมวดหมู่": "PPE"},
-        {"ชื่อวัสดุ": "Face Mask",                          "หน่วย": "กล่อง",    "คงเหลือ": 6,  "Reorder Point": 5,  "หมวดหมู่": "PPE"},
-        {"ชื่อวัสดุ": "Etchant Gel 37%",                    "หน่วย": "หลอด",     "คงเหลือ": 7,  "Reorder Point": 4,  "หมวดหมู่": "Restorative"},
+        {"ชื่อวัสดุ": "Composite Resin (Filtek Z350)",      "หน่วย": "กล่อง",   "คงเหลือ": 3,  "Reorder Point": 5,  "หมวดหมู่": "Restorative"},
+        {"ชื่อวัสดุ": "Bonding Agent (Adper Single Bond)",  "หน่วย": "ขวด",     "คงเหลือ": 2,  "Reorder Point": 3,  "หมวดหมู่": "Restorative"},
+        {"ชื่อวัสดุ": "Glass Ionomer Cement (Fuji IX)",     "หน่วย": "กระป๋อง", "คงเหลือ": 8,  "Reorder Point": 4,  "หมวดหมู่": "Restorative"},
+        {"ชื่อวัสดุ": "Impression Material (Aquasil)",      "หน่วย": "กล่อง",   "คงเหลือ": 1,  "Reorder Point": 3,  "หมวดหมู่": "Impression"},
+        {"ชื่อวัสดุ": "Lidocaine 2% (ยาชา)",                "หน่วย": "กล่อง",   "คงเหลือ": 12, "Reorder Point": 10, "หมวดหมู่": "Anesthetic"},
+        {"ชื่อวัสดุ": "Gloves Size M",                      "หน่วย": "กล่อง",   "คงเหลือ": 4,  "Reorder Point": 5,  "หมวดหมู่": "PPE"},
+        {"ชื่อวัสดุ": "Face Mask",                          "หน่วย": "กล่อง",   "คงเหลือ": 6,  "Reorder Point": 5,  "หมวดหมู่": "PPE"},
+        {"ชื่อวัสดุ": "Etchant Gel 37%",                    "หน่วย": "หลอด",    "คงเหลือ": 7,  "Reorder Point": 4,  "หมวดหมู่": "Restorative"},
     ])
 
 
 def _mock_history() -> pd.DataFrame:
     return pd.DataFrame([
-        {"วันที่": "2026-05-10 09:15", "ประเภท": "รับเข้า", "ชื่อวัสดุ": "Gloves Size M",                     "จำนวน": 5, "หมายเหตุ": "สั่งซื้อรายเดือน", "ผู้ทำรายการ": "นุ่น"},
-        {"วันที่": "2026-05-11 10:30", "ประเภท": "เบิกออก", "ชื่อวัสดุ": "Composite Resin (Filtek Z350)",    "จำนวน": 2, "หมายเหตุ": "ห้องตรวจ 1",       "ผู้ทำรายการ": "ปุ้ม"},
-        {"วันที่": "2026-05-12 08:45", "ประเภท": "เบิกออก", "ชื่อวัสดุ": "Lidocaine 2% (ยาชา)",             "จำนวน": 1, "หมายเหตุ": "ห้องตรวจ 2",       "ผู้ทำรายการ": "นุ่น"},
-        {"วันที่": "2026-05-12 14:00", "ประเภท": "รับเข้า", "ชื่อวัสดุ": "Bonding Agent (Adper Single Bond)","จำนวน": 3, "หมายเหตุ": "สั่งซื้อเพิ่ม",    "ผู้ทำรายการ": "ปุ้ม"},
-        {"วันที่": "2026-05-13 09:00", "ประเภท": "เบิกออก", "ชื่อวัสดุ": "Face Mask",                        "จำนวน": 1, "หมายเหตุ": "ใช้ประจำวัน",     "ผู้ทำรายการ": "นุ่น"},
+        {"วันที่": "2026-05-10 09:15", "ประเภท": "รับเข้า",     "ชื่อวัสดุ": "Gloves Size M",                      "จำนวน": 5, "หมายเหตุ": "สั่งซื้อรายเดือน", "ผู้ทำรายการ": "นุ่น"},
+        {"วันที่": "2026-05-11 10:30", "ประเภท": "อัพเดทสต้อค", "ชื่อวัสดุ": "Composite Resin (Filtek Z350)",     "จำนวน": 2, "หมายเหตุ": "3 → 2",            "ผู้ทำรายการ": "ปุ้ม"},
+        {"วันที่": "2026-05-12 08:45", "ประเภท": "อัพเดทสต้อค", "ชื่อวัสดุ": "Lidocaine 2% (ยาชา)",              "จำนวน": 1, "หมายเหตุ": "12 → 1",           "ผู้ทำรายการ": "นุ่น"},
+        {"วันที่": "2026-05-12 14:00", "ประเภท": "รับเข้า",     "ชื่อวัสดุ": "Bonding Agent (Adper Single Bond)", "จำนวน": 3, "หมายเหตุ": "สั่งซื้อเพิ่ม",   "ผู้ทำรายการ": "ปุ้ม"},
+        {"วันที่": "2026-05-13 09:00", "ประเภท": "อัพเดทสต้อค", "ชื่อวัสดุ": "Face Mask",                         "จำนวน": 1, "หมายเหตุ": "6 → 1",            "ผู้ทำรายการ": "นุ่น"},
     ])

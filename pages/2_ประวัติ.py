@@ -1,23 +1,11 @@
 import streamlit as st
-import sys
-import os
+import sys, os
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from sheets import get_history_df
+from utils import apply_styles
 
 st.set_page_config(page_title="ประวัติการทำรายการ", page_icon="🗂️", layout="wide")
-
-st.markdown("""
-<style>
-    .main-header { font-size: 2rem; font-weight: 700; color: #4FC3F7; margin-bottom: 0.25rem; }
-    .sub-header  { font-size: 0.9rem; color: #888; margin-bottom: 1.5rem; }
-    .section-title {
-        font-size: 1.1rem; font-weight: 600; color: #4FC3F7;
-        border-bottom: 1px solid #2A3040; padding-bottom: 0.4rem; margin-bottom: 1rem;
-    }
-    .badge-in  { color: #66BB6A; font-weight: 600; }
-    .badge-out { color: #E57373; font-weight: 600; }
-</style>
-""", unsafe_allow_html=True)
+apply_styles()
 
 st.markdown('<div class="main-header">🗂️ ประวัติการทำรายการ</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-header">Log การรับเข้าและเบิกออกทั้งหมด</div>', unsafe_allow_html=True)
