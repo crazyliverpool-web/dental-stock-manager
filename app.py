@@ -71,10 +71,24 @@ if "ผู้รับผิดชอบ" not in df.columns:
 
 if selected != "ทั้งหมด":
     view = df[df["ผู้รับผิดชอบ"] == selected].copy()
-    st.markdown(f'<div class="section-title">📋 ของที่ {selected} รับผิดชอบ</div>', unsafe_allow_html=True)
 else:
     view = df.copy()
-    st.markdown('<div class="section-title">📋 สต้อควัสดุทั้งหมด</div>', unsafe_allow_html=True)
+
+# ─── Search ───────────────────────────────────────────────────────────────────
+search = st.text_input("🔍 ค้นหาวัสดุ (ชื่อวัสดุ / ชื่อสามัญ / ชื่อทางการค้า)",
+                       placeholder="เช่น composite, 3M, Kuraray...",
+                       label_visibility="collapsed")
+if search:
+    mask = view["ชื่อวัสดุ"].str.contains(search, case=False, na=False)
+    for col in ["ชื่อสามัญ", "ชื่อทางการค้า"]:
+        if col in view.columns:
+            mask = mask | view[col].str.contains(search, case=False, na=False)
+    view = view[mask]
+
+if selected != "ทั้งหมด":
+    st.markdown(f'<div class="section-title">📋 ของที่ {selected} รับผิดชอบ — {len(view)} รายการ</div>', unsafe_allow_html=True)
+else:
+    st.markdown(f'<div class="section-title">📋 สต้อควัสดุทั้งหมด — {len(view)} รายการ</div>', unsafe_allow_html=True)
 
 low_stock = view[view["คงเหลือ"] <= view["Reorder Point"]]
 
