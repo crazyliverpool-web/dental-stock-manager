@@ -160,9 +160,48 @@ def require_pin() -> bool:
     return False
 
 
+def require_user() -> str | None:
+    """After PIN, ask who is logged in. Returns username or None."""
+    if not st.session_state.get("pin_ok"):
+        return None
+    if st.session_state.get("current_user"):
+        return st.session_state["current_user"]
+
+    from sheets import get_staff_list
+    staff = get_staff_list()
+
+    st.markdown("""
+    <div style="max-width:340px; margin:2rem auto; background:#1A1F2E;
+                border:1px solid #2A3040; border-radius:14px; padding:2rem; text-align:center;">
+        <div style="font-size:2.5rem; margin-bottom:0.5rem;">👤</div>
+        <div style="font-size:1.1rem; font-weight:600; color:#4FC3F7; margin-bottom:0.5rem;">
+            คุณคือใคร?
+        </div>
+        <div style="font-size:0.8rem; color:#888;">เลือกชื่อเพื่อเริ่มบันทึก</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    col = st.columns([1, 2, 1])[1]
+    with col:
+        for name in staff:
+            if st.button(name, use_container_width=True, key=f"login_{name}"):
+                st.session_state["current_user"] = name
+                st.rerun()
+
+    return None
+
+
+def get_current_user() -> str:
+    return st.session_state.get("current_user", "unknown")
+
+
 def pin_logout_button():
-    """Small lock button in sidebar to end the PIN session."""
+    """Sidebar: show current user + logout button."""
     if st.session_state.get("pin_ok"):
-        if st.sidebar.button("🔒 ล็อคระบบ", use_container_width=True):
+        user = st.session_state.get("current_user")
+        if user:
+            st.sidebar.markdown(f"**👤 {user}**")
+        if st.sidebar.button("🔒 ล็อกออก", use_container_width=True):
             st.session_state["pin_ok"] = False
+            st.session_state["current_user"] = None
             st.rerun()
