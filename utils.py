@@ -26,6 +26,54 @@ _CSS = """
     [data-testid="stDataFrame"] { border: 1px solid #2A3040; border-radius: 10px; overflow: hidden; }
     .badge-in  { color: #66BB6A; font-weight: 600; }
     .badge-out { color: #E57373; font-weight: 600; }
+
+    /* ── Mobile (≤768px) ─────────────────────────────────────────── */
+    @media (max-width: 768px) {
+        .main-header { font-size: 1.4rem !important; }
+        .sub-header  { font-size: 0.8rem !important; margin-bottom: 0.75rem !important; }
+        .section-title { font-size: 0.95rem !important; }
+
+        /* ปุ่มใหญ่ขึ้น กดง่ายบนมือถือ */
+        .stButton > button {
+            min-height: 3rem !important;
+            font-size: 1rem !important;
+            padding: 0.5rem 0.75rem !important;
+        }
+
+        /* columns wrap แทนที่จะล้นออกหน้าจอ */
+        [data-testid="stHorizontalBlock"] {
+            flex-wrap: wrap !important;
+            gap: 0.4rem !important;
+        }
+        [data-testid="stHorizontalBlock"] > div {
+            min-width: 72px !important;
+            flex: 1 1 72px !important;
+        }
+
+        /* check status cards เล็กลงนิด */
+        .check-ok, .check-warn, .check-late, .check-none {
+            font-size: 0.72rem !important;
+            padding: 0.4rem 0.4rem !important;
+        }
+
+        /* metric cards padding ลด */
+        [data-testid="metric-container"] { padding: 0.6rem !important; }
+
+        /* table font เล็กลงให้อ่านได้บนมือถือ */
+        [data-testid="stDataFrame"] td,
+        [data-testid="stDataFrame"] th { font-size: 0.78rem !important; }
+
+        /* sidebar collapse ให้พื้นที่หน้าหลัก */
+        [data-testid="stSidebar"] { min-width: 0 !important; }
+    }
+
+    /* ── Tablet (769–1024px) ─────────────────────────────────────── */
+    @media (min-width: 769px) and (max-width: 1024px) {
+        .main-header { font-size: 1.6rem !important; }
+        .stButton > button { min-height: 2.5rem !important; font-size: 0.95rem !important; }
+        [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; gap: 0.3rem !important; }
+        [data-testid="stHorizontalBlock"] > div { min-width: 80px !important; flex: 1 1 80px !important; }
+    }
 </style>
 """
 
