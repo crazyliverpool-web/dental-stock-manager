@@ -381,6 +381,45 @@ def _read_check_ws(ws) -> list:
     return items
 
 
+def preview_sync_from_check_sheet() -> dict:
+    """เหมือน sync_from_check_sheet แต่ไม่ write — ใช้แสดง preview ก่อน confirm"""
+    gc  = _get_client()
+    src = gc.open_by_key(CHECK_SHEET_ID)
+    dst = gc.open_by_key(_get_sheet_id()).worksheet("Stock")
+
+    records  = dst.get_all_records()
+    headers  = dst.row_values(1)
+    stock_index = {_norm(r["ชื่อวัสดุ"]): {"row": i+2, "cur_qty": r["คงเหลือ"],
+                                             "name": r["ชื่อวัสดุ"]}
+                   for i, r in enumerate(records)}
+    stock_keys = list(stock_index.keys())
+
+    details, skipped = [], []
+    for sheet_name in _SHEET_STAFF:
+        try:
+            ws = src.worksheet(sheet_name)
+        except gspread.exceptions.WorksheetNotFound:
+            continue
+        for name, new_qty in _read_check_ws(ws):
+            key = _norm(name)
+            entry = stock_index.get(key)
+            if entry is None and key in _ALIAS:
+                entry = stock_index.get(_ALIAS[key])
+            if entry is None:
+                fk = difflib.get_close_matches(key, stock_keys, n=1, cutoff=0.80)
+                if fk:
+                    entry = stock_index[fk[0]]
+            if entry:
+                details.append({"ชื่อ": entry["name"], "เดิม": entry["cur_qty"],
+                                 "ใหม่": new_qty, "เปลี่ยน": entry["cur_qty"] != new_qty})
+            else:
+                skipped.append(name)
+
+    updated = sum(1 for d in details if d["เปลี่ยน"])
+    return {"matched": len(details), "updated": updated,
+            "skipped": len(skipped), "details": details, "skipped_names": skipped}
+
+
 def sync_from_check_sheet() -> dict:
     """ดึงข้อมูลจาก sheet เช็คสต๊อกรายเดือน แล้วอัพเดทลง Stock
     Returns: {"matched": int, "updated": int, "skipped": int, "details": list}
