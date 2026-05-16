@@ -40,7 +40,7 @@ def require_pin() -> bool:
         return True
 
     try:
-        correct_pin = str(st.secrets["PIN"]).strip()
+        correct_pin = str(st.secrets["auth"]["PIN"]).strip()
     except Exception:
         correct_pin = "1234"
 
