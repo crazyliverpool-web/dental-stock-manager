@@ -48,7 +48,11 @@ with f_col3:
 view = all_items.copy()
 
 if search:
-    view = view[view["ชื่อวัสดุ"].str.contains(search, case=False, na=False)]
+    mask = view["ชื่อวัสดุ"].str.contains(search, case=False, na=False)
+    for col in ["ชื่อสามัญ", "ชื่อทางการค้า"]:
+        if col in view.columns:
+            mask = mask | view[col].str.contains(search, case=False, na=False)
+    view = view[mask]
 
 if cat_filter != "ทุกหมวด":
     view = view[view["หมวดหมู่"] == cat_filter]
@@ -63,7 +67,7 @@ label = f"📦 {current_user} — แสดง {showing}/{total} รายกา
 st.markdown(f'<div class="section-title">{label}</div>', unsafe_allow_html=True)
 st.caption("แก้ไขตัวเลขในคอลัมน์ **คงเหลือ** ได้เลย แล้วกดบันทึกด้านล่าง")
 
-edit_cols = ["ชื่อวัสดุ", "หน่วย", "คงเหลือ", "Reorder Point", "หมวดหมู่"]
+edit_cols = ["ชื่อวัสดุ", "ชื่อสามัญ", "ชื่อทางการค้า", "หน่วย", "คงเหลือ", "Reorder Point", "หมวดหมู่"]
 edit_cols = [c for c in edit_cols if c in view.columns]
 
 original = view[edit_cols].reset_index(drop=True)

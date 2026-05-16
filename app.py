@@ -105,7 +105,7 @@ def highlight_low(row):
         return ["color: #E57373"] * len(row)
     return ["color: #A5D6A7"] * len(row)
 
-display_cols = ["ชื่อวัสดุ", "หน่วย", "คงเหลือ", "Reorder Point", "หมวดหมู่", "ผู้รับผิดชอบ"]
+display_cols = ["ชื่อวัสดุ", "ชื่อสามัญ", "ชื่อทางการค้า", "หน่วย", "คงเหลือ", "Reorder Point", "หมวดหมู่", "ผู้รับผิดชอบ"]
 display_cols = [c for c in display_cols if c in view.columns]
 
 st.dataframe(
