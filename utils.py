@@ -39,7 +39,10 @@ def require_pin() -> bool:
     if st.session_state.get("pin_ok"):
         return True
 
-    correct_pin = st.secrets.get("PIN", "1234")
+    try:
+        correct_pin = str(st.secrets["PIN"]).strip()
+    except Exception:
+        correct_pin = "1234"
 
     st.markdown("""
     <div style="max-width:340px; margin:3rem auto; background:#1A1F2E;
@@ -62,7 +65,7 @@ def require_pin() -> bool:
             submitted = st.form_submit_button("ปลดล็อก", type="primary", use_container_width=True)
 
         if submitted:
-            if entered == correct_pin:
+            if entered.strip() == correct_pin:
                 st.session_state["pin_ok"] = True
                 st.rerun()
             else:
