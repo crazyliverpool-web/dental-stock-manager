@@ -2,10 +2,14 @@ import streamlit as st
 import sys, os
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from sheets import sync_from_check_sheet
-from utils import apply_styles
+from utils import apply_styles, require_pin, pin_logout_button
 
 st.set_page_config(page_title="Sync จาก Sheet เช็คสต๊อก", page_icon="🔁", layout="wide")
 apply_styles()
+pin_logout_button()
+
+if not require_pin():
+    st.stop()
 
 st.markdown('<div class="main-header">🔁 Sync จาก Sheet เช็คสต๊อกรายเดือน</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-header">ดึงจำนวนคงเหลือล่าสุดจาก Sheet ของแต่ละพนักงานมาอัพเดทใน Stock</div>',

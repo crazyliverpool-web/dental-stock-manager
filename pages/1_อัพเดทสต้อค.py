@@ -3,12 +3,16 @@ import sys, os
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from datetime import date
 from sheets import get_stock_df, save_stock_updates, record_stock_check, get_staff_list
-from utils import apply_styles
+from utils import apply_styles, require_pin, pin_logout_button
 
 STAFF = get_staff_list()
 
 st.set_page_config(page_title="อัพเดทสต้อค", page_icon="📋", layout="wide")
 apply_styles()
+pin_logout_button()
+
+if not require_pin():
+    st.stop()
 
 st.markdown('<div class="main-header">📋 อัพเดทสต้อค</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-header">นับของแล้วใส่ตัวเลข กดบันทึกครั้งเดียว</div>', unsafe_allow_html=True)

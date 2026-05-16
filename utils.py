@@ -32,3 +32,48 @@ _CSS = """
 
 def apply_styles():
     st.markdown(_CSS, unsafe_allow_html=True)
+
+
+def require_pin() -> bool:
+    """Show PIN gate. Returns True if already authenticated, False and renders form if not."""
+    if st.session_state.get("pin_ok"):
+        return True
+
+    correct_pin = st.secrets.get("PIN", "1234")
+
+    st.markdown("""
+    <div style="max-width:340px; margin:3rem auto; background:#1A1F2E;
+                border:1px solid #2A3040; border-radius:14px; padding:2rem; text-align:center;">
+        <div style="font-size:2.5rem; margin-bottom:0.5rem;">🔐</div>
+        <div style="font-size:1.1rem; font-weight:600; color:#4FC3F7; margin-bottom:0.25rem;">
+            ต้องใส่ PIN เพื่อแก้ไขข้อมูล
+        </div>
+        <div style="font-size:0.8rem; color:#888; margin-bottom:1.5rem;">
+            หน้านี้ป้องกันด้วย PIN — ดูข้อมูลได้ที่หน้า Dashboard
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    col = st.columns([1, 2, 1])[1]
+    with col:
+        with st.form("pin_form", clear_on_submit=True):
+            entered = st.text_input("PIN", type="password", placeholder="ใส่ PIN แล้วกด Enter",
+                                    label_visibility="collapsed")
+            submitted = st.form_submit_button("ปลดล็อก", type="primary", use_container_width=True)
+
+        if submitted:
+            if entered == correct_pin:
+                st.session_state["pin_ok"] = True
+                st.rerun()
+            else:
+                st.error("PIN ไม่ถูกต้อง")
+
+    return False
+
+
+def pin_logout_button():
+    """Small lock button in sidebar to end the PIN session."""
+    if st.session_state.get("pin_ok"):
+        if st.sidebar.button("🔒 ล็อคระบบ", use_container_width=True):
+            st.session_state["pin_ok"] = False
+            st.rerun()

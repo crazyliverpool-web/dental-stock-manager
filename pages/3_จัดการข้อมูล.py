@@ -2,10 +2,14 @@ import streamlit as st
 import sys, os
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from sheets import get_staff_list, add_staff, remove_staff, add_stock_item, get_stock_df
-from utils import apply_styles
+from utils import apply_styles, require_pin, pin_logout_button
 
 st.set_page_config(page_title="จัดการข้อมูล", page_icon="⚙️", layout="wide")
 apply_styles()
+pin_logout_button()
+
+if not require_pin():
+    st.stop()
 
 st.markdown('<div class="main-header">⚙️ จัดการข้อมูล</div>', unsafe_allow_html=True)
 st.markdown('<div class="sub-header">เพิ่มวัสดุ / จัดการพนักงาน</div>', unsafe_allow_html=True)
