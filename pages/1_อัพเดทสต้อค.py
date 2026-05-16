@@ -20,19 +20,47 @@ current_user = get_current_user()
 st.markdown('<div class="main-header">📋 อัพเดทสต้อค</div>', unsafe_allow_html=True)
 st.markdown(f'<div class="sub-header">ล็อกอินเป็น <b>{current_user}</b> — นับของแล้วใส่ตัวเลข กดบันทึกครั้งเดียว</div>', unsafe_allow_html=True)
 
-# ─── Load & filter ────────────────────────────────────────────────────────────
+# ─── Load data ────────────────────────────────────────────────────────────────
 df = get_stock_df()
 if "ผู้รับผิดชอบ" not in df.columns:
     df["ผู้รับผิดชอบ"] = ""
 
-view = df[df["ผู้รับผิดชอบ"] == current_user].copy()
+all_items = df[df["ผู้รับผิดชอบ"] == current_user].copy()
 
-if view.empty:
+if all_items.empty:
     st.warning(f"ยังไม่มีรายการที่ assign ให้ {current_user}")
     st.stop()
 
+# ─── Search & Filter ──────────────────────────────────────────────────────────
+f_col1, f_col2, f_col3 = st.columns([3, 2, 2])
+
+with f_col1:
+    search = st.text_input("🔍 ค้นหาชื่อวัสดุ", placeholder="พิมพ์ชื่อ...", label_visibility="collapsed")
+
+with f_col2:
+    categories = ["ทุกหมวด"] + sorted(all_items["หมวดหมู่"].unique().tolist()) if "หมวดหมู่" in all_items.columns else ["ทุกหมวด"]
+    cat_filter = st.selectbox("หมวดหมู่", categories, label_visibility="collapsed")
+
+with f_col3:
+    low_only = st.checkbox("⚠️ เฉพาะที่ต้องสั่งเพิ่ม")
+
+# ─── Apply filters ────────────────────────────────────────────────────────────
+view = all_items.copy()
+
+if search:
+    view = view[view["ชื่อวัสดุ"].str.contains(search, case=False, na=False)]
+
+if cat_filter != "ทุกหมวด":
+    view = view[view["หมวดหมู่"] == cat_filter]
+
+if low_only and "Reorder Point" in view.columns:
+    view = view[view["คงเหลือ"] <= view["Reorder Point"]]
+
 # ─── Editable table ───────────────────────────────────────────────────────────
-st.markdown(f'<div class="section-title">📦 รายการของ {current_user} — {len(view)} รายการ</div>', unsafe_allow_html=True)
+total = len(all_items)
+showing = len(view)
+label = f"📦 {current_user} — แสดง {showing}/{total} รายการ"
+st.markdown(f'<div class="section-title">{label}</div>', unsafe_allow_html=True)
 st.caption("แก้ไขตัวเลขในคอลัมน์ **คงเหลือ** ได้เลย แล้วกดบันทึกด้านล่าง")
 
 edit_cols = ["ชื่อวัสดุ", "หน่วย", "คงเหลือ", "Reorder Point", "หมวดหมู่"]
