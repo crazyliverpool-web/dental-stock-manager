@@ -2,10 +2,14 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, date
 from sheets import get_stock_df, get_staff_check_summary, get_staff_list, get_pending_syncs
-from utils import apply_styles
+from utils import apply_styles, require_pin, pin_logout_button
 
 st.set_page_config(page_title="Dental Stock Manager", page_icon="🦷", layout="wide")
 apply_styles()
+pin_logout_button()
+
+if not require_pin():
+    st.stop()
 
 STAFF = ["ทั้งหมด"] + get_staff_list()
 
