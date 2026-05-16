@@ -82,17 +82,47 @@ def apply_styles():
     st.markdown(_CSS, unsafe_allow_html=True)
 
 
+_MAX_ATTEMPTS = 5
+_LOCKOUT_SECONDS = 300  # 5 นาที
+
+
 def require_pin() -> bool:
-    """Show PIN gate. Returns True if already authenticated, False and renders form if not."""
+    """Show PIN gate with rate limiting. Returns True if authenticated."""
+    import time
+
     if st.session_state.get("pin_ok"):
         return True
+
+    # ── Rate limit check ──────────────────────────────────────────────
+    attempts = st.session_state.get("pin_attempts", 0)
+    locked_until = st.session_state.get("pin_locked_until", 0)
+    now = time.time()
+
+    if locked_until > now:
+        remaining = int(locked_until - now)
+        mins, secs = divmod(remaining, 60)
+        st.markdown(f"""
+        <div style="max-width:340px; margin:3rem auto; background:#2A1A1A;
+                    border:1px solid #E53935; border-radius:14px; padding:2rem; text-align:center;">
+            <div style="font-size:2.5rem; margin-bottom:0.5rem;">🚫</div>
+            <div style="font-size:1.1rem; font-weight:600; color:#EF5350; margin-bottom:0.5rem;">
+                ล็อคชั่วคราว
+            </div>
+            <div style="font-size:0.9rem; color:#FFCDD2;">
+                ใส่ PIN ผิดหลายครั้ง<br>รอ <b>{mins}:{secs:02d}</b> นาที
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        st.rerun()
+        return False
 
     try:
         correct_pin = str(st.secrets["auth"]["PIN"]).strip()
     except Exception:
         correct_pin = "1234"
 
-    st.markdown("""
+    attempts_left = _MAX_ATTEMPTS - attempts
+    st.markdown(f"""
     <div style="max-width:340px; margin:3rem auto; background:#1A1F2E;
                 border:1px solid #2A3040; border-radius:14px; padding:2rem; text-align:center;">
         <div style="font-size:2.5rem; margin-bottom:0.5rem;">🔐</div>
@@ -100,7 +130,7 @@ def require_pin() -> bool:
             ต้องใส่ PIN เพื่อแก้ไขข้อมูล
         </div>
         <div style="font-size:0.8rem; color:#888; margin-bottom:1.5rem;">
-            หน้านี้ป้องกันด้วย PIN — ดูข้อมูลได้ที่หน้า Dashboard
+            {"ดูข้อมูลได้ที่หน้า Dashboard" if attempts == 0 else f"⚠️ เหลือ {attempts_left} ครั้ง ก่อนล็อค 5 นาที"}
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -115,9 +145,17 @@ def require_pin() -> bool:
         if submitted:
             if entered.strip() == correct_pin:
                 st.session_state["pin_ok"] = True
+                st.session_state["pin_attempts"] = 0
                 st.rerun()
             else:
-                st.error("PIN ไม่ถูกต้อง")
+                new_attempts = attempts + 1
+                st.session_state["pin_attempts"] = new_attempts
+                if new_attempts >= _MAX_ATTEMPTS:
+                    st.session_state["pin_locked_until"] = now + _LOCKOUT_SECONDS
+                    st.session_state["pin_attempts"] = 0
+                    st.rerun()
+                else:
+                    st.error(f"PIN ไม่ถูกต้อง — เหลือ {_MAX_ATTEMPTS - new_attempts} ครั้ง")
 
     return False
 
